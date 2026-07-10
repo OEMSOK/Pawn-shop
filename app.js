@@ -2264,7 +2264,6 @@ function setupInitialCredentials(e) {
 
 function handleLogin(e) {
     e.preventDefault();
-    let user = document.getElementById('loginUsername').value.trim();
     let pass = document.getElementById('loginPassword').value;
     
     if (!state.userCredentials) {
@@ -2273,10 +2272,14 @@ function handleLogin(e) {
     }
     
     let matchedRole = null;
-    if (state.userCredentials.admin.username === user && state.userCredentials.admin.password === pass) {
+    let user = '';
+    
+    if (state.userCredentials.admin.password === pass) {
         matchedRole = 'admin';
-    } else if (state.userCredentials.cashier.username === user && state.userCredentials.cashier.password === pass) {
+        user = state.userCredentials.admin.username;
+    } else if (state.userCredentials.cashier.password === pass) {
         matchedRole = 'cashier';
+        user = state.userCredentials.cashier.username;
     }
     
     if (matchedRole) {
@@ -2322,7 +2325,6 @@ function logout(isAuto = false) {
 }
 
 function showLoginOverlay() {
-    document.getElementById('loginUsername').value = '';
     document.getElementById('loginPassword').value = '';
     document.getElementById('loginOverlay').style.display = 'flex';
 }
@@ -2331,7 +2333,31 @@ function setLoginLang(lang) {
     state.lang = lang;
     localStorage.setItem('pawn_lang', lang);
     translateUI();
-    document.getElementById('langSelect').value = lang;
+    
+    const langSelect = document.getElementById('langSelect');
+    if (langSelect) langSelect.value = lang;
+    
+    const khBtn = document.getElementById('loginLangKhBtn');
+    const enBtn = document.getElementById('loginLangEnBtn');
+    if (khBtn && enBtn) {
+        if (lang === 'kh') {
+            khBtn.style.border = '1px solid var(--border-gold)';
+            khBtn.style.background = 'var(--gold-light)';
+            khBtn.style.color = 'var(--gold)';
+            
+            enBtn.style.border = '1px solid var(--border-color)';
+            enBtn.style.background = 'rgba(255,255,255,0.03)';
+            enBtn.style.color = 'var(--text-muted)';
+        } else {
+            enBtn.style.border = '1px solid var(--border-gold)';
+            enBtn.style.background = 'var(--gold-light)';
+            enBtn.style.color = 'var(--gold)';
+            
+            khBtn.style.border = '1px solid var(--border-color)';
+            khBtn.style.background = 'rgba(255,255,255,0.03)';
+            khBtn.style.color = 'var(--text-muted)';
+        }
+    }
 }
 
 function renderSettings() {
@@ -2640,6 +2666,7 @@ window.addEventListener('DOMContentLoaded', () => {
         document.getElementById('setupModal').style.display = 'flex';
     } else {
         translateUI();
+        setLoginLang(state.lang);
         if (!state.currentUser) {
             showLoginOverlay();
         } else {

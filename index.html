@@ -54,16 +54,6 @@
                 <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 24px;" data-i18n="appName">ប្រព័ន្ធគ្រប់គ្រងហាងបញ្ចាំ</p>
                 
                 <form onsubmit="handleLogin(event)">
-                    <div class="form-group" style="margin-bottom: 16px; text-align: left;">
-                        <label for="loginUsername" class="animated-label" style="font-size: 0.85rem; font-weight: bold; margin-bottom: 6px; display: block;" data-i18n="usernameLabel">ឈ្មោះអ្នកប្រើប្រាស់ (Username)</label>
-                        <div class="input-animated-wrapper">
-                            <div class="input-animated-inner">
-                                <i class="fas fa-user" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); z-index: 3;"></i>
-                                <input type="text" id="loginUsername" placeholder="Enter username" style="width: 100%; padding: 10px 12px 10px 36px; background: transparent; border: none; outline: none; color: #fff; position: relative; z-index: 2;" required>
-                            </div>
-                        </div>
-                    </div>
-                    
                     <div class="form-group" style="margin-bottom: 24px; text-align: left;">
                         <label for="loginPassword" class="animated-label" style="font-size: 0.85rem; font-weight: bold; margin-bottom: 6px; display: block;" data-i18n="passwordLabel">លេខសម្ងាត់ (Password)</label>
                         <div class="input-animated-wrapper">
@@ -77,13 +67,19 @@
                     <button type="submit" class="btn btn-gold" style="width: 100%; padding: 12px; font-weight: bold; font-size: 0.95rem;" data-i18n="loginBtn">ចូលប្រើប្រាស់</button>
                 </form>
                 
-                <div style="margin-top: 20px; display: flex; justify-content: center; gap: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
-                    <span onclick="setLoginLang('kh')" style="cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; gap: 5px; color: var(--text-muted);" id="loginLangKhBtn">
-                        🇰🇭 Khmer
-                    </span>
-                    <span onclick="setLoginLang('en')" style="cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; gap: 5px; color: var(--text-muted);" id="loginLangEnBtn">
-                        🇺🇸 English
-                    </span>
+                <div style="margin-top: 20px; display: flex; justify-content: center; gap: 12px; border-top: 1px solid var(--border-color); padding-top: 20px;">
+                    <button type="button" onclick="setLoginLang('kh')" id="loginLangKhBtn" style="padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border-gold); background: var(--gold-light); color: var(--gold); font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.3s ease; outline: none; font-family: inherit;">
+                        <img src="https://flagcdn.com/w40/kh.png" alt="Khmer" style="width: 16px; height: 12px; border-radius: 2px; object-fit: cover;"> Khmer
+                    </button>
+                    <button type="button" onclick="setLoginLang('en')" id="loginLangEnBtn" style="padding: 6px 14px; border-radius: 20px; border: 1px solid var(--border-color); background: rgba(255,255,255,0.03); color: var(--text-muted); font-size: 0.8rem; cursor: pointer; display: flex; align-items: center; gap: 6px; transition: all 0.3s ease; outline: none; font-family: inherit;">
+                        <img src="https://flagcdn.com/w40/us.png" alt="English" style="width: 16px; height: 12px; border-radius: 2px; object-fit: cover;"> English
+                    </button>
+                </div>
+                
+                <div style="margin-top: 20px; display: flex; justify-content: center;">
+                    <div style="font-size: 0.7rem; color: var(--gold); border: 1px solid var(--border-gold); background: var(--gold-light); padding: 4px 14px; border-radius: 12px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; box-shadow: 0 0 10px rgba(214, 175, 55, 0.1);">
+                        App2026 @ OEM SOK
+                    </div>
                 </div>
             </div>
         </div>
