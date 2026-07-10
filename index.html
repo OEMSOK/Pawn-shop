@@ -1,0 +1,787 @@
+<!DOCTYPE html>
+<html lang="km">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lucky Pawn Shop Management System</title>
+    <!-- FontAwesome Icons CDN -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Local stylesheet -->
+    <link rel="stylesheet" href="style.css">
+    <!-- Firebase SDK Compat -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+</head>
+<body>
+
+    <!-- Initial Setup Modal (Only shown on first load if no credentials exist) -->
+    <div id="setupModal" class="modal-overlay" style="display: none; background: radial-gradient(circle at center, #141722 0%, #0b0d13 100%) !important; z-index: 999999 !important;">
+        <div class="modal-content" style="max-width: 450px; background: var(--bg-card); border: 1px solid var(--border-gold); padding: 30px; border-radius: 12px;">
+            <div class="modal-header" style="margin-bottom: 20px;">
+                <h2 id="setupModalTitle" data-i18n="setupCredentialsTitle" style="color: var(--gold); font-size: 1.3rem;">រៀបចំគណនីដំបូង</h2>
+            </div>
+            <form onsubmit="setupInitialCredentials(event)">
+                <h4 style="color: var(--gold); margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px;" data-i18n="adminAccount">គណនី Admin</h4>
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label for="setupAdminUser" data-i18n="usernameLabel">ឈ្មោះអ្នកប្រើប្រាស់ (Username)</label>
+                    <input type="text" id="setupAdminUser" value="admin" required style="width: 100%; padding: 8px 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 6px; color: #fff;">
+                </div>
+                <div class="form-group" style="margin-bottom: 16px;">
+                    <label for="setupAdminPassword" data-i18n="passwordLabel">លេខសម្ងាត់ (Password)</label>
+                    <input type="password" id="setupAdminPassword" placeholder="Enter Admin Password" required style="width: 100%; padding: 8px 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 6px; color: #fff;">
+                </div>
+
+                <h4 style="color: var(--gold); margin-bottom: 10px; border-bottom: 1px solid var(--border-color); padding-bottom: 5px; margin-top: 20px;" data-i18n="cashierAccount">គណនី Cashier</h4>
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label for="setupCashierUser" data-i18n="usernameLabel">ឈ្មោះអ្នកប្រើប្រាស់ (Username)</label>
+                    <input type="text" id="setupCashierUser" value="cashier" required style="width: 100%; padding: 8px 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 6px; color: #fff;">
+                </div>
+                <div class="form-group" style="margin-bottom: 24px;">
+                    <label for="setupCashierPassword" data-i18n="passwordLabel">លេខសម្ងាត់ (Password)</label>
+                    <input type="password" id="setupCashierPassword" placeholder="Enter Cashier Password" required style="width: 100%; padding: 8px 12px; background: rgba(0,0,0,0.2); border: 1px solid var(--border-color); border-radius: 6px; color: #fff;">
+                </div>
+                <button type="submit" class="btn btn-gold" style="width: 100%; padding: 12px;" data-i18n="setupBtn">យល់ព្រមបន្ត</button>
+            </form>
+        </div>
+    </div>
+
+    <!-- Login Screen Overlay -->
+    <div id="loginOverlay" class="modal-overlay" style="display: none; background: radial-gradient(circle at center, #141722 0%, #0b0d13 100%) !important; z-index: 999998 !important;">
+        <div class="login-card-wrapper">
+            <div class="login-card-content">
+                <img src="logo.jpg" alt="Logo" class="login-logo-animated">
+                <h2 class="login-brand-title">សុខ ស៊ីណេត</h2>
+                <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 24px;" data-i18n="appName">ប្រព័ន្ធគ្រប់គ្រងហាងបញ្ចាំ</p>
+                
+                <form onsubmit="handleLogin(event)">
+                    <div class="form-group" style="margin-bottom: 16px; text-align: left;">
+                        <label for="loginUsername" class="animated-label" style="font-size: 0.85rem; font-weight: bold; margin-bottom: 6px; display: block;" data-i18n="usernameLabel">ឈ្មោះអ្នកប្រើប្រាស់ (Username)</label>
+                        <div class="input-animated-wrapper">
+                            <div class="input-animated-inner">
+                                <i class="fas fa-user" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); z-index: 3;"></i>
+                                <input type="text" id="loginUsername" placeholder="Enter username" style="width: 100%; padding: 10px 12px 10px 36px; background: transparent; border: none; outline: none; color: #fff; position: relative; z-index: 2;" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div class="form-group" style="margin-bottom: 24px; text-align: left;">
+                        <label for="loginPassword" class="animated-label" style="font-size: 0.85rem; font-weight: bold; margin-bottom: 6px; display: block;" data-i18n="passwordLabel">លេខសម្ងាត់ (Password)</label>
+                        <div class="input-animated-wrapper">
+                            <div class="input-animated-inner">
+                                <i class="fas fa-lock" style="position: absolute; left: 12px; top: 50%; transform: translateY(-50%); color: var(--text-muted); z-index: 3;"></i>
+                                <input type="password" id="loginPassword" placeholder="Enter password" style="width: 100%; padding: 10px 12px 10px 36px; background: transparent; border: none; outline: none; color: #fff; position: relative; z-index: 2;" required>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <button type="submit" class="btn btn-gold" style="width: 100%; padding: 12px; font-weight: bold; font-size: 0.95rem;" data-i18n="loginBtn">ចូលប្រើប្រាស់</button>
+                </form>
+                
+                <div style="margin-top: 20px; display: flex; justify-content: center; gap: 15px; border-top: 1px solid var(--border-color); padding-top: 15px;">
+                    <span onclick="setLoginLang('kh')" style="cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; gap: 5px; color: var(--text-muted);" id="loginLangKhBtn">
+                        🇰🇭 Khmer
+                    </span>
+                    <span onclick="setLoginLang('en')" style="cursor: pointer; font-size: 0.85rem; display: flex; align-items: center; gap: 5px; color: var(--text-muted);" id="loginLangEnBtn">
+                        🇺🇸 English
+                    </span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App Container Layout -->
+    <div class="app-container">
+        
+        <!-- Sidebar Navigation -->
+        <aside class="sidebar">
+            <div class="sidebar-logo">
+                <img src="logo.jpg" alt="Logo">
+                <div class="sidebar-title-group">
+                    <h2 class="sidebar-title-main" data-i18n="shopBrand">សុខ ស៊ីណេត</h2>
+                    <p class="sidebar-title-sub" data-i18n="appName">ប្រព័ន្ធគ្រប់គ្រងហាងបញ្ចាំ</p>
+                </div>
+            </div>
+            
+            <div class="profile-card-wrapper">
+                <div class="user-profile">
+                    <div class="user-info" style="display: flex; align-items: center; justify-content: center; gap: 8px;">
+                        <span class="user-badge" id="currentUserBadge">...</span>
+                        <button class="btn-lock" onclick="logout()" title="Logout" style="background: rgba(239, 68, 68, 0.15); border-color: rgba(239, 68, 68, 0.4); color: #ef4444; width: 32px; height: 32px; border-radius: 50%; display: flex; align-items: center; justify-content: center; border: 1px solid; cursor: pointer;" id="logoutBtn">
+                            <i class="fas fa-sign-out-alt"></i>
+                        </button>
+                    </div>
+                    <div style="font-size: 0.75rem; color: var(--text-muted); text-align: center; margin-top: 4px;" data-i18n="currentRole">តួនាទីបច្ចុប្បន្ន</div>
+                </div>
+            </div>
+            
+            <nav style="flex-grow: 1;">
+                <ul class="sidebar-nav">
+                    <li class="active" onclick="switchTab('dashboard')">
+                        <i class="fas fa-chart-line"></i>
+                        <span data-i18n="dashboard">ផ្ទាំងគ្រប់គ្រង</span>
+                    </li>
+                    <li onclick="switchTab('newTicket')">
+                        <i class="fas fa-plus-circle"></i>
+                        <span data-i18n="newTicket">បង្កើតសំបុត្របញ្ចាំ</span>
+                    </li>
+                    <li onclick="switchTab('activeTickets')">
+                        <i class="fas fa-ticket-alt"></i>
+                        <span data-i18n="activeTickets">សំបុត្រសកម្ម</span>
+                    </li>
+                    <li onclick="switchTab('history')">
+                        <i class="fas fa-history"></i>
+                        <span data-i18n="history">ប្រវត្តិនៃការបញ្ចាំ</span>
+                    </li>
+                    <li onclick="switchTab('reports')">
+                        <i class="fas fa-file-invoice-dollar"></i>
+                        <span data-i18n="reports">របាយការណ៍</span>
+                    </li>
+                    <li onclick="switchTab('settings')">
+                        <i class="fas fa-cog"></i>
+                        <span data-i18n="settings">ការកំណត់ & ស្ដារ</span>
+                    </li>
+                </ul>
+            </nav>
+            
+            <div class="sidebar-footer">
+                <div class="lang-picker">
+                    <i class="fas fa-globe"></i>
+                    <span data-i18n="language">ភាសា</span>:
+                    <select id="langSelect">
+                        <option value="kh">ខ្មែរ</option>
+                        <option value="en">English</option>
+                    </select>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Main Content Area -->
+        <main class="main-content">
+            
+            <!-- Top Header Search & Stats Toggle -->
+            <header class="top-header">
+                <div class="search-bar">
+                    <i class="fas fa-search"></i>
+                    <input type="text" id="globalSearch" data-i18n-placeholder="searchPlaceholder" oninput="handleSearch(this.value)" placeholder="ស្វែងរកឈ្មោះ លេខទូរសព្ទ...">
+                </div>
+                <div class="header-actions">
+                    <!-- Real-time Cloud Sync Status -->
+                    <div id="syncStatusIndicator" class="sync-status-indicator local-mode" title="Sync Status / ស្ថានភាពតភ្ជាប់ Cloud">
+                        <span class="sync-dot"></span>
+                        <span id="syncStatusText" data-i18n="syncStatusLocal">Local Mode</span>
+                    </div>
+                    <button class="btn btn-glowing-cycle btn-sm" onclick="switchTab('newTicket')">
+                        <i class="fas fa-plus"></i> <span data-i18n="newTicket">សំបុត្របញ្ចាំថ្មី</span>
+                    </button>
+                </div>
+            </header>
+
+            <!-- Dashboard Section -->
+            <section id="dashboardSection" class="view-section active">
+                <div class="stats-grid">
+                    <div class="stat-card-wrapper">
+                        <div class="stat-card">
+                            <span class="stat-card-title" data-i18n="totalActiveLoans">ទឹកប្រាក់កំពុងបញ្ចាំសរុប</span>
+                            <span class="stat-card-value" id="dashTotalLent">$0</span>
+                        </div>
+                    </div>
+                    <div class="stat-card-wrapper">
+                        <div class="stat-card">
+                            <span class="stat-card-title" data-i18n="totalInterestEstimated">ការប្រាក់ត្រូវប្រមូល (ប៉ាន់ស្មាន)</span>
+                            <span class="stat-card-value" id="dashTotalEstInterest">$0</span>
+                        </div>
+                    </div>
+                    <div class="stat-card-wrapper">
+                        <div class="stat-card">
+                            <span class="stat-card-title" data-i18n="activeTicketsCount">សំបុត្រកំពុងសកម្ម</span>
+                            <span class="stat-card-value" id="dashActiveCount">0</span>
+                        </div>
+                    </div>
+                    <div class="stat-card-wrapper overdue">
+                        <div class="stat-card overdue">
+                            <span class="stat-card-title" data-i18n="overdueTicketsCount">សំបុត្រហួសកំណត់</span>
+                            <span class="stat-card-value" id="dashOverdueCount" style="color: var(--danger);">0</span>
+                        </div>
+                    </div>
+                    <div class="stat-card-wrapper">
+                        <div class="stat-card">
+                            <span class="stat-card-title" data-i18n="monthlyRevenue">ចំណូលការប្រាក់ខែនេះ</span>
+                            <span class="stat-card-value" id="dashMonthlyRevenue" style="color: var(--success);">$0</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Custom visual charts card -->
+                <div class="card">
+                    <div class="card-title-bar">
+                        <div class="card-title">
+                            <i class="fas fa-chart-pie"></i>
+                            <span data-i18n="interestCalculation">ការវិភាគទ្រព្យសកម្ម</span>
+                        </div>
+                    </div>
+                    <div id="dashboardChartContainer">
+                        <!-- Rendered by JS -->
+                    </div>
+                </div>
+
+                <!-- Recent active tickets -->
+                <div class="card">
+                    <div class="card-title-bar">
+                        <div class="card-title">
+                            <i class="fas fa-clock"></i>
+                            <span data-i18n="recentTickets">សំបុត្របញ្ចាំថ្មីៗ</span>
+                        </div>
+                    </div>
+                    <div class="table-container">
+                        <table class="custom-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="ticketId">លេខកូដសំបុត្រ</th>
+                                    <th data-i18n="customer">អតិថិជន</th>
+                                    <th data-i18n="itemType">ប្រភេទទ្រព្យ</th>
+                                    <th data-i18n="weight">ទម្ងន់</th>
+                                    <th data-i18n="loanAmount">ទឹកប្រាក់</th>
+                                    <th data-i18n="status">ស្ថានភាព</th>
+                                    <th data-i18n="actions">សកម្មភាព</th>
+                                </tr>
+                            </thead>
+                            <tbody id="recentTicketsBody">
+                                <!-- Data rows added dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- New/Edit Pawn Ticket Form Section -->
+            <section id="newTicketSection" class="view-section">
+                <div class="card">
+                    <div class="card-title-bar">
+                        <h2 class="card-title" id="ticketFormTitle" data-i18n="newTicket">បង្កើតសំបុត្របញ្ចាំថ្មី</h2>
+                    </div>
+                    
+                    <form id="ticketForm" onsubmit="saveTicket(event)">
+                        <input type="hidden" id="ticketFormId">
+                        
+                        <div class="form-grid">
+                            <!-- Customer Details -->
+                            <div class="form-group">
+                                <label for="ticketCustomerName"><span data-i18n="customer">ឈ្មោះអតិថិជន</span> *</label>
+                                <input type="text" id="ticketCustomerName" required placeholder="e.g. សុខ សុភ័ក្រ">
+                            </div>
+                            <div class="form-group">
+                                <label for="ticketCustomerPhone" data-i18n="phone">លេខទូរសព្ទ</label>
+                                <input type="text" id="ticketCustomerPhone" placeholder="e.g. 012 345 678">
+                            </div>
+                            <div class="form-group">
+                                <label for="ticketCustomerId" data-i18n="customerId">លេខសម្គាល់អតិថិជន (ID)</label>
+                                <input type="text" id="ticketCustomerId" readonly style="background-color: rgba(255, 255, 255, 0.05); color: var(--gold); border-color: var(--border-color); cursor: not-allowed;" placeholder="Auto-generated">
+                            </div>
+                        </div>
+
+                        <hr style="border:0; border-top: 1px solid var(--border-color); margin-bottom: 24px;">
+
+                        <div class="form-grid">
+                            <!-- Collateral Details -->
+                            <div class="form-group">
+                                <label for="ticketItemType"><span data-i18n="itemType">ប្រភេទទ្រព្យបញ្ចាំ</span> *</label>
+                                <select id="ticketItemType" onchange="updatePurityOptions()" required>
+                                    <option value="gold" data-i18n="gold">មាស</option>
+                                    <option value="platinum" data-i18n="platinum">ផ្លាកទីន</option>
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label for="ticketPurity"><span data-i18n="purity">ទឹកមាស/ផ្លាកទីន</span> *</label>
+                                <select id="ticketPurity" required>
+                                    <!-- Options updated dynamically -->
+                                </select>
+                            </div>
+                            
+                            <div class="form-group">
+                                <label><span data-i18n="weight">ទម្ងន់</span> *</label>
+                                <div id="traditionalWeightInputs" class="traditional-inputs">
+                                    <div class="sub-input">
+                                        <input type="number" id="weightChi" min="0" step="1" value="0" oninput="handleWeightInputs()">
+                                        <span data-i18n="chi">ជី</span>
+                                    </div>
+                                    <div class="sub-input">
+                                        <input type="number" id="weightHun" min="0" max="9" step="1" value="0" oninput="handleWeightInputs()">
+                                        <span data-i18n="hun">ហ៊ុន</span>
+                                    </div>
+                                    <div class="sub-input">
+                                        <input type="number" id="weightLy" min="0" max="9" step="1" value="0" oninput="handleWeightInputs()">
+                                        <span data-i18n="ly">លី</span>
+                                    </div>
+                                </div>
+                                <input type="hidden" id="ticketWeightGrams" value="0">
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 24px;">
+                            <label for="ticketDescription" data-i18n="itemDescription">អាសយដ្ឋាន (ភូមិ)</label>
+                            <select id="ticketDescription" required>
+                                <!-- Village options populated dynamically -->
+                            </select>
+                        </div>
+
+                        <hr style="border:0; border-top: 1px solid var(--border-color); margin-bottom: 24px;">
+
+                        <div class="form-grid">
+                            <!-- Loan Financial Terms -->
+                            <div class="form-group">
+                                <label for="ticketCurrency"><span data-i18n="currency">រូបិយប័ណ្ណ</span> *</label>
+                                <select id="ticketCurrency" onchange="handleCurrencyChange()" required>
+                                    <option value="USD">USD ($)</option>
+                                    <option value="KHR">KHR (៛)</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="ticketLoanAmount" id="lblLoanAmount">ទឹកប្រាក់ខ្ចី ($) *</label>
+                                <input type="number" id="ticketLoanAmount" min="1" step="any" required placeholder="0.00">
+                            </div>
+                            <div class="form-group">
+                                <label for="ticketInterestRate"><span data-i18n="interestRate">ការប្រាក់/ថ្ងៃ (រៀល)</span> *</label>
+                                <input type="number" id="ticketInterestRate" min="500" value="500" required placeholder="500">
+                            </div>
+                            <div class="form-group">
+                                <label for="ticketPawnDate"><span data-i18n="pawnDate">ថ្ងៃបញ្ចាំ</span> *</label>
+                                <input type="date" id="ticketPawnDate" required>
+                            </div>
+                            <div class="form-group">
+                                <label for="ticketDueDate"><span data-i18n="dueDate">ថ្ងៃកំណត់លោះ</span> *</label>
+                                <input type="date" id="ticketDueDate" required>
+                            </div>
+                        </div>
+
+                        <div class="form-group" style="margin-bottom: 24px;">
+                            <label for="ticketNotes" data-i18n="notes">សម្គាល់បន្ថែម</label>
+                            <select id="ticketNotes" required>
+                                <!-- Options populated dynamically by JS -->
+                            </select>
+                        </div>
+
+                        <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                            <button type="button" class="btn btn-secondary" onclick="switchTab('dashboard')" data-i18n="cancel">បោះបង់</button>
+                            <button type="submit" class="btn btn-gold" data-i18n="save">រក្សាទុកសំបុត្រ</button>
+                        </div>
+                    </form>
+                </div>
+            </section>
+
+            <!-- Active Tickets List Section -->
+            <section id="activeTicketsSection" class="view-section">
+                <div class="card">
+                    <div class="card-title-bar">
+                        <h2 class="card-title">
+                            <i class="fas fa-ticket-alt"></i>
+                            <span data-i18n="activeTickets">សំបុត្រកំពុងសកម្ម</span>
+                        </h2>
+                        
+                        <div style="display: flex; gap: 10px;">
+                            <select id="statusFilter" onchange="handleStatusFilter(this.value)" style="background: var(--bg-main); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 8px; outline: none;">
+                                <option value="all" data-i18n="all">ទាំងអស់</option>
+                                <option value="active" data-i18n="active">សកម្ម</option>
+                                <option value="overdue" data-i18n="overdue">ហួសកំណត់</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table class="custom-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="ticketId">លេខសំបុត្រ</th>
+                                    <th data-i18n="customer">អតិថិជន</th>
+                                    <th data-i18n="itemType">ប្រភេទទ្រព្យ</th>
+                                    <th data-i18n="weight">ទម្ងន់</th>
+                                    <th data-i18n="loanAmount">ប្រាក់បញ្ចាំ</th>
+                                    <th data-i18n="interestRate">ការប្រាក់</th>
+                                    <th data-i18n="status">ស្ថានភាព</th>
+                                    <th data-i18n="actions">សកម្មភាព</th>
+                                </tr>
+                            </thead>
+                            <tbody id="activeTicketsBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- History Section -->
+            <section id="historySection" class="view-section">
+                <div class="card">
+                    <div class="card-title-bar">
+                        <h2 class="card-title">
+                            <i class="fas fa-history"></i>
+                            <span data-i18n="history">ប្រវត្តិនៃការបញ្ចាំ (លោះរួច & ដាច់បញ្ចាំ)</span>
+                        </h2>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table class="custom-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="ticketId">លេខសំបុត្រ</th>
+                                    <th data-i18n="customer">អតិថិជន</th>
+                                    <th data-i18n="itemType">ប្រភេទទ្រព្យ</th>
+                                    <th data-i18n="weight">ទម្ងន់</th>
+                                    <th data-i18n="loanAmount">ប្រាក់បញ្ចាំ</th>
+                                    <th data-i18n="status">ស្ថានភាព</th>
+                                    <th data-i18n="actions">សកម្មភាព</th>
+                                </tr>
+                            </thead>
+                            <tbody id="historyBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Reports Section -->
+            <section id="reportsSection" class="view-section">
+                <div class="report-filters-bar">
+                    <i class="fas fa-calendar-alt" style="color: var(--gold); font-size: 1.2rem;"></i>
+                    <span data-i18n="dailyReport" style="font-weight: 600;">ត្រួតពិនិត្យរបាយការណ៍</span>:
+                    
+                    <select id="reportYearSelect" onchange="renderReports()" style="background: var(--bg-main); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 8px;"></select>
+                    <select id="reportMonthSelect" onchange="renderReports()" style="background: var(--bg-main); color: var(--text-main); border: 1px solid var(--border-color); border-radius: 6px; padding: 4px 8px;"></select>
+                </div>
+                
+                <div class="report-summary-cards">
+                    <div class="report-stat-mini out">
+                        <h4 data-i18n="totalCashOut">ប្រាក់ចេញបញ្ចាំសរុប</h4>
+                        <p id="repTotalCashOut">$0</p>
+                    </div>
+                    <div class="report-stat-mini in">
+                        <h4 data-i18n="totalCashIn">ប្រាក់លោះចូលសរុប</h4>
+                        <p id="repTotalCashIn">$0</p>
+                    </div>
+                    <div class="report-stat-mini interest">
+                        <h4 data-i18n="totalInterestCollected">ការប្រាក់ប្រមូលបានសរុប</h4>
+                        <p id="repTotalInterest">$0</p>
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <div class="card-title-bar">
+                        <span class="card-title" data-i18n="reports">របាយការណ៍លម្អិត</span>
+                        <button class="btn btn-secondary btn-sm" onclick="window.print()">
+                            <i class="fas fa-print"></i> <span data-i18n="print">ព្រីនរបាយការណ៍</span>
+                        </button>
+                    </div>
+                    
+                    <div class="table-container">
+                        <table class="custom-table">
+                            <thead>
+                                <tr>
+                                    <th data-i18n="date">កាលបរិច្ឆេទ</th>
+                                    <th data-i18n="ticketId">លេខសំបុត្រ</th>
+                                    <th data-i18n="customer">អតិថិជន</th>
+                                    <th data-i18n="status">ប្រភេទ</th>
+                                    <th data-i18n="totalCashOut">ប្រាក់បញ្ចាំចេញ</th>
+                                    <th data-i18n="totalCashIn">ប្រាក់ដើមលោះចូល</th>
+                                    <th data-i18n="interestDue">ការប្រាក់ប្រមូលបាន</th>
+                                </tr>
+                            </thead>
+                            <tbody id="reportDetailsBody">
+                                <!-- Populated dynamically -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </section>
+
+            <!-- Settings / Database Section -->
+            <section id="settingsSection" class="view-section">
+                <div class="form-grid">
+                    <!-- Backup & Restore -->
+                    <div class="card">
+                        <div class="card-title-bar">
+                            <h3 class="card-title"><i class="fas fa-database"></i> <span data-i18n="backupRestore">រក្សាទុក និងស្ដារទិន្នន័យ</span></h3>
+                        </div>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;" data-i18n="securityNotice">
+                            ទិន្នន័យទាំងអស់ត្រូវបានរក្សាទុកនៅលើ browser ក្នុងម៉ាស៊ីននេះផ្ទាល់។
+                        </p>
+                        <div style="display: flex; flex-direction: column; gap: 16px;">
+                            <button class="btn btn-primary" onclick="exportDatabase()" style="width: 100%; padding: 14px;">
+                                <i class="fas fa-download"></i> <span data-i18n="exportData">នាំចេញទិន្នន័យ (Backup)</span>
+                            </button>
+                            
+                            <hr style="border:0; border-top: 1px solid var(--border-color); margin: 8px 0;">
+                            
+                            <div class="form-group">
+                                <label style="font-size: 0.85rem; font-weight: bold; margin-bottom: 8px; display: block;" data-i18n="importData">នាំចូលទិន្នន័យ (Restore)</label>
+                                <div class="custom-file-upload">
+                                    <input type="file" id="importFile" accept=".json" onchange="importDatabase(event)">
+                                    <label for="importFile" class="file-upload-label">
+                                        <i class="fas fa-cloud-upload-alt"></i>
+                                        <div class="upload-text">
+                                            <strong id="importFileLabel" data-i18n="chooseFile">ជ្រើសរើសឯកសារ JSON</strong>
+                                            <span class="upload-subtext" data-i18n="clickToUpload">ចុចទីនេះដើម្បីស្វែងរកឯកសារ</span>
+                                        </div>
+                                    </label>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- System Theme Settings Card -->
+                    <div class="card">
+                        <div class="card-title-bar">
+                            <h3 class="card-title"><i class="fas fa-palette"></i> <span data-i18n="themeSettings">ប្ដូរពណ៌ផ្ទៃប្រព័ន្ធ</span></h3>
+                        </div>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;" data-i18n="themeDesc">
+                            ជ្រើសរើសប្រធានបទពណ៌ដែលអ្នកពេញចិត្តសម្រាប់ផ្ទៃប្រព័ន្ធទាំងមូល។
+                        </p>
+                        <div class="theme-selector-grid">
+                            <button type="button" class="theme-selector-btn" data-theme="gold" onclick="applyTheme('gold')">
+                                <span class="theme-color-dot" style="background-color: #D4AF37;"></span>
+                                <span class="theme-name" data-i18n="themeGold">Classic Gold</span>
+                            </button>
+                            <button type="button" class="theme-selector-btn" data-theme="green" onclick="applyTheme('green')">
+                                <span class="theme-color-dot" style="background-color: #10b981;"></span>
+                                <span class="theme-name" data-i18n="themeGreen">Emerald Green</span>
+                            </button>
+                            <button type="button" class="theme-selector-btn" data-theme="blue" onclick="applyTheme('blue')">
+                                <span class="theme-color-dot" style="background-color: #3b82f6;"></span>
+                                <span class="theme-name" data-i18n="themeBlue">Sapphire Blue</span>
+                            </button>
+                            <button type="button" class="theme-selector-btn" data-theme="purple" onclick="applyTheme('purple')">
+                                <span class="theme-color-dot" style="background-color: #a855f7;"></span>
+                                <span class="theme-name" data-i18n="themePurple">Amethyst Purple</span>
+                            </button>
+                            <button type="button" class="theme-selector-btn" data-theme="ruby" onclick="applyTheme('ruby')">
+                                <span class="theme-color-dot" style="background-color: #ec4899;"></span>
+                                <span class="theme-name" data-i18n="themeRuby">Ruby Pink</span>
+                            </button>
+                            <button type="button" class="theme-selector-btn" data-theme="light" onclick="applyTheme('light')">
+                                <span class="theme-color-dot" style="background-color: #bda032;"></span>
+                                <span class="theme-name" data-i18n="themeLight">Classic Light</span>
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Cloud Sync Settings Card -->
+                    <div class="card" style="grid-column: span 2;">
+                        <div class="card-title-bar">
+                            <h3 class="card-title"><i class="fas fa-cloud"></i> <span data-i18n="cloudSyncSettings">ការកំណត់ការភ្ជាប់ទៅ Cloud</span></h3>
+                        </div>
+                        <p style="font-size: 0.85rem; color: var(--text-muted); margin-bottom: 20px;" data-i18n="cloudSyncDesc">
+                            ភ្ជាប់ប្រព័ន្ធទៅកាន់ Firebase Realtime Database ដើម្បីធ្វើសមកាលកម្ម (Sync) ទិន្នន័យរវាងឧបករណ៍ច្រើនក្នុងពេលតែមួយ។
+                        </p>
+                        
+                        <form id="syncSettingsForm" onsubmit="saveSyncSettings(event)">
+                            <div class="form-grid" style="grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; margin-bottom: 20px;">
+                                <div class="sync-form-group">
+                                    <label for="syncModeSelect" data-i18n="syncMode">របៀបដំណើរការប្រព័ន្ធ</label>
+                                    <select id="syncModeSelect" onchange="toggleSyncFields()">
+                                        <option value="local" data-i18n="localMode">រក្សាទុកក្នុងម៉ាស៊ីន (Local Storage Only)</option>
+                                        <option value="firebase" data-i18n="firebaseMode">សមកាលកម្មលើ Cloud (Firebase Realtime DB)</option>
+                                    </select>
+                                </div>
+                                <div class="sync-form-group fb-field">
+                                    <label for="syncShopNamespace" data-i18n="shopNamespace">លេខសម្គាល់ហាង / Namespace</label>
+                                    <input type="text" id="syncShopNamespace" placeholder="e.g. sok_sineth" value="sok_sineth">
+                                </div>
+                                <div class="sync-form-group fb-field">
+                                    <label for="syncApiKey" data-i18n="apiKey">Firebase API Key</label>
+                                    <input type="password" id="syncApiKey" placeholder="AIzaSy...">
+                                </div>
+                                <div class="sync-form-group fb-field">
+                                    <label for="syncAuthDomain" data-i18n="authDomain">Firebase Auth Domain</label>
+                                    <input type="text" id="syncAuthDomain" placeholder="project-id.firebaseapp.com">
+                                </div>
+                                <div class="sync-form-group fb-field">
+                                    <label for="syncDatabaseURL" data-i18n="databaseURL">Firebase Database URL (សំខាន់)</label>
+                                    <input type="text" id="syncDatabaseURL" placeholder="https://project-id-default-rtdb.firebaseio.com">
+                                </div>
+                                <div class="sync-form-group fb-field">
+                                    <label for="syncProjectId" data-i18n="projectId">Firebase Project ID</label>
+                                    <input type="text" id="syncProjectId" placeholder="project-id">
+                                </div>
+                                <div class="sync-form-group fb-field">
+                                    <label for="syncStorageBucket" data-i18n="storageBucket">Firebase Storage Bucket</label>
+                                    <input type="text" id="syncStorageBucket" placeholder="project-id.appspot.com">
+                                </div>
+                                <div class="sync-form-group fb-field">
+                                    <label for="syncMessagingSenderId" data-i18n="messagingSenderId">Messaging Sender ID</label>
+                                    <input type="text" id="syncMessagingSenderId" placeholder="1234567890">
+                                </div>
+                                <div class="sync-form-group fb-field">
+                                    <label for="syncAppId" data-i18n="appId">Firebase App ID</label>
+                                    <input type="text" id="syncAppId" placeholder="1:12345:web:abcd">
+                                </div>
+                            </div>
+                            
+                            <div class="details-alert fb-field" style="margin-bottom: 20px; padding: 12px 16px; font-size: 0.85rem; background: rgba(245, 158, 11, 0.08); border: 1px solid rgba(245, 158, 11, 0.2); border-radius: 8px; color: var(--text-main); display: flex; flex-direction: column; gap: 4px;">
+                                <strong style="color: #f59e0b;"><i class="fas fa-exclamation-triangle"></i> សំគាល់ / Notice:</strong>
+                                <span>១. ដើម្បីដំណើរការបានដោយរលូន សូមកំណត់ Database Rules ទៅជា <code>".read": "true"</code> និង <code>".write": "true"</code> នៅក្នុង Firebase Console។</span>
+                                <span>២. ពេលបើក Cloud Sync ប្រព័ន្ធនឹងទាញយកទិន្នន័យពី Cloud (ប្រសិនបើមាន) ឬបញ្ជូនទិន្នន័យពីម៉ាស៊ីននេះទៅ Cloud (ប្រសិនបើ Cloud ទទេ)។</span>
+                            </div>
+                            
+                            <button type="submit" class="btn btn-gold" style="padding: 12px 24px; font-weight: bold;" data-i18n="saveSyncSettings">
+                                រក្សាទុកការកំណត់ Sync
+                            </button>
+                        </form>
+                    </div>
+                    
+                    <!-- Audit Logs Panel -->
+                    <div class="card" style="grid-column: span 2;">
+                        <div class="card-title-bar">
+                            <h3 class="card-title"><i class="fas fa-list-alt"></i> <span data-i18n="settings">កំណត់ហេតុសកម្មភាព (Audit Logs)</span></h3>
+                        </div>
+                        <div class="table-container" style="max-height: 300px; overflow-y: auto;">
+                            <table class="custom-table" style="font-size: 0.85rem;">
+                                <thead>
+                                    <tr>
+                                        <th style="width: 25%;">Time</th>
+                                        <th style="width: 15%;">User</th>
+                                        <th style="width: 20%;">Action</th>
+                                        <th>Details</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="logsBody">
+                                    <!-- Logs populated dynamically -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </section>
+
+        </main>
+    </div>
+
+    <!-- Details View Modal -->
+    <div id="detailsModal" class="modal-overlay">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2><i class="fas fa-info-circle"></i> <span data-i18n="details">ព័ត៌មានសំបុត្របញ្ចាំលម្អិត</span></h2>
+                <button class="modal-close" onclick="closeModal('detailsModal')">&times;</button>
+            </div>
+            <div id="detailsModalContent">
+                <!-- Loaded dynamically by JS -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Redemption Dialog Modal -->
+    <div id="redeemModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 480px;">
+            <div class="modal-header">
+                <h2><i class="fas fa-hand-holding-usd"></i> <span data-i18n="redeem">ការលោះទ្រព្យបញ្ចាំ</span></h2>
+                <button class="modal-close" onclick="closeModal('redeemModal')">&times;</button>
+            </div>
+            <form onsubmit="submitRedeem(event)">
+                <input type="hidden" id="redeemTicketId">
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label for="redeemPrincipal" data-i18n="principalPaid">ប្រាក់ដើមត្រូវបង់</label>
+                    <input type="text" id="redeemPrincipal" oninput="handlePrincipalInput(this)" required>
+                </div>
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label for="redeemInterest" data-i18n="interestPaid">ការប្រាក់ត្រូវបង់</label>
+                    <input type="text" id="redeemInterest" oninput="handleRielInput(this)" required>
+                </div>
+                <div class="form-group" style="margin-bottom: 24px;">
+                    <label for="redeemTotal" data-i18n="totalToPay">ប្រាក់សរុបត្រូវបង់</label>
+                    <input type="text" id="redeemTotal" disabled style="background-color: var(--gold-light); font-weight: bold; border-color: var(--gold); color: var(--gold);">
+                </div>
+                
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('redeemModal')" data-i18n="cancel">បោះបង់</button>
+                    <button type="submit" class="btn btn-success" data-i18n="redeem">បញ្ជាក់ការលោះ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Partial Redemption Dialog Modal -->
+    <div id="partialRedeemModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 480px;">
+            <div class="modal-header">
+                <h2><i class="fas fa-coins"></i> <span data-i18n="partialRedeem">ការលោះខ្លះ / បង់ការប្រាក់</span></h2>
+                <button class="modal-close" onclick="closeModal('partialRedeemModal')">&times;</button>
+            </div>
+            <form onsubmit="submitPartialRedeem(event)">
+                <input type="hidden" id="partialRedeemTicketId">
+                
+                <div class="details-alert" style="margin-bottom: 15px; padding: 12px; font-size: 0.9rem; background: rgba(245, 158, 11, 0.1); border: 1px solid rgba(245, 158, 11, 0.25); border-radius: 8px; color: var(--text-main);">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                        <span>ប្រាក់ដើមបច្ចុប្បន្ន៖</span>
+                        <strong id="partialRedeemOrigPrincipal">-</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 6px;">
+                        <span>ការប្រាក់បង្គរមកដល់ថ្ងៃនេះ៖</span>
+                        <strong id="partialRedeemAccruedInterest" style="color: var(--warning);">-</strong>
+                    </div>
+                    <div style="display: flex; justify-content: space-between; font-size: 0.8rem; color: var(--text-muted);">
+                        <span>គិតរយៈពេល៖</span>
+                        <span id="partialRedeemDays">-</span>
+                    </div>
+                </div>
+
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label for="partialRedeemPrincipal" data-i18n="principalPaid">ប្រាក់ដើមត្រូវបង់</label>
+                    <input type="text" id="partialRedeemPrincipal" oninput="handlePartialPrincipalInput(this)" required>
+                    <small style="color: var(--text-muted); font-size: 0.75rem;">(បញ្ចូល 0 បើលោះតែការប្រាក់)</small>
+                </div>
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label for="partialRedeemInterest" data-i18n="interestPaid">ការប្រាក់ត្រូវបង់</label>
+                    <input type="text" id="partialRedeemInterest" oninput="handleRielInput(this)" required>
+                </div>
+                <div class="form-group" style="margin-bottom: 24px;">
+                    <label for="partialRedeemTotal" data-i18n="totalToPay">ប្រាក់សរុបត្រូវបង់</label>
+                    <input type="text" id="partialRedeemTotal" disabled style="background-color: var(--gold-light); font-weight: bold; border-color: var(--gold); color: var(--gold);">
+                </div>
+                
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('partialRedeemModal')" data-i18n="cancel">បោះបង់</button>
+                    <button type="submit" class="btn btn-warning" data-i18n="partialRedeem">បញ្ជាក់ការលោះខ្លះ</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Borrow More Dialog Modal -->
+    <div id="borrowMoreModal" class="modal-overlay">
+        <div class="modal-content" style="max-width: 480px;">
+            <div class="modal-header">
+                <h2><i class="fas fa-plus-circle"></i> <span data-i18n="borrowMore">ខ្ចីប្រាក់បន្ថែម</span></h2>
+                <button class="modal-close" onclick="closeModal('borrowMoreModal')">&times;</button>
+            </div>
+            <form onsubmit="submitBorrowMore(event)">
+                <input type="hidden" id="borrowMoreTicketId">
+                
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label for="borrowMoreAmount" id="lblBorrowMoreAmount">ទឹកប្រាក់ខ្ចីបន្ថែម ($) *</label>
+                    <input type="text" id="borrowMoreAmount" oninput="handleBorrowMoreAmountInput(this)" required>
+                </div>
+                <div class="form-group" style="margin-bottom: 12px;">
+                    <label for="borrowMoreInterestRate"><span data-i18n="interestRate">ការប្រាក់/ថ្ងៃ (រៀល)</span> *</label>
+                    <input type="number" id="borrowMoreInterestRate" min="0" value="500" required placeholder="500">
+                </div>
+                <div class="form-group" style="margin-bottom: 24px;">
+                    <label for="borrowMorePawnDate"><span data-i18n="pawnDate">ថ្ងៃបញ្ចាំ</span> *</label>
+                    <input type="date" id="borrowMorePawnDate" required>
+                </div>
+                
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('borrowMoreModal')" data-i18n="cancel">បោះបង់</button>
+                    <button type="submit" class="btn btn-warning" data-i18n="save">រក្សាទុក</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Print Only Layout (Populated dynamically on print trigger) -->
+    <div id="receiptPrintArea">
+        <!-- Rendered by JS, print layout styled in style.css -->
+    </div>
+
+    <!-- Core App logic -->
+    <script src="app.js"></script>
+</body>
+</html>
