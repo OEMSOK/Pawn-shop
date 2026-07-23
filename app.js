@@ -1636,6 +1636,7 @@ function openDetailsModal(id) {
                 <button class="btn btn-danger" onclick="forfeitTicket('${ticket.id}')"><i class="fas fa-gavel"></i> ${t('forfeit')}</button>
             ` : ''}
             <button class="btn btn-gold" onclick="viewTicketReceipt('${ticket.id}')"><i class="fas fa-print"></i> ${t('print')}</button>
+            <button class="btn btn-gold" onclick="printTicketViaBluetooth('${ticket.id}')" style="background: linear-gradient(135deg, #1e3a8a 0%, #3b82f6 100%) !important; border-color: #3b82f6 !important;"><i class="fas fa-print"></i> ${isKh ? 'ព្រីន Bluetooth' : 'Print Bluetooth'}</button>
             <button class="btn btn-secondary" onclick="closeModal('detailsModal')">${isKh ? 'បិទ' : 'Close'}</button>
         </div>
     `;
@@ -2694,3 +2695,451 @@ window.addEventListener('DOMContentLoaded', () => {
         });
     }
 });
+
+// ==========================================
+// Bluetooth Receipt Printer Functionality
+// ==========================================
+
+let btDevice = null;
+let btCharacteristic = null;
+
+async function connectBluetoothPrinter() {
+    const btn = document.getElementById('btnConnectBluetooth');
+    const textSpan = document.getElementById('bluetoothPrinterText');
+    const icon = document.getElementById('bluetoothPrinterIcon');
+    
+    if (btDevice && btDevice.gatt.connected) {
+        try {
+            await btDevice.gatt.disconnect();
+            btDevice = null;
+            btCharacteristic = null;
+            if (btn) btn.style.background = 'rgba(255,255,255,0.05)';
+            if (textSpan) textSpan.innerText = state.lang === 'kh' ? 'Bluetooth បិទ' : 'Bluetooth Off';
+            if (icon) icon.style.color = '#6b7280';
+            alert(state.lang === 'kh' ? "បានផ្ដាច់ពីម៉ាស៊ីនព្រីនរួចរាល់" : "Disconnected from printer.");
+        } catch (e) {
+            console.error(e);
+        }
+        return;
+    }
+
+    try {
+        if (!navigator.bluetooth) {
+            alert(state.lang === 'kh' ? "កម្មវិធីរុករក (Browser) របស់អ្នកមិនគាំទ្រ Bluetooth ទេ។ សូមប្រើប្រាស់ Google Chrome ឬ Bluefy Browser លើ iPhone។" : "Web Bluetooth is not supported by your browser. Please use Chrome, Edge, or Bluefy on iOS.");
+            return;
+        }
+
+        if (textSpan) textSpan.innerText = state.lang === 'kh' ? 'កំពុងស្វែងរក...' : 'Searching...';
+
+        btDevice = await navigator.bluetooth.requestDevice({
+            acceptAllDevices: true,
+            optionalServices: [
+                '000018f0-0000-1000-8000-00805f9b34fb', // General Printer
+                '0000e781-0000-1000-8000-00805f9b34fb', // Custom service
+                'e7810a71-73ae-499d-8c15-faa9aef0c3f2', // ISSC
+                '00001101-0000-1000-8000-00805f9b34fb'  // Serial Port Profile (SPP)
+            ]
+        });
+
+        if (textSpan) textSpan.innerText = state.lang === 'kh' ? 'កំពុងភ្ជាប់...' : 'Connecting...';
+        
+        const server = await btDevice.gatt.connect();
+        
+        const services = await server.getPrimaryServices();
+        let writeChar = null;
+        
+        for (const service of services) {
+            try {
+                const characteristics = await service.getCharacteristics();
+                for (const char of characteristics) {
+                    if (char.properties.write || char.properties.writeWithoutResponse) {
+                        writeChar = char;
+                        break;
+                    }
+                }
+            } catch (e) {
+                console.warn("Could not read characteristics from service " + service.uuid, e);
+            }
+            if (writeChar) break;
+        }
+
+        if (!writeChar) {
+            throw new Error(state.lang === 'kh' ? "មិនអាចស្វែងរក Characteristic សម្រាប់ព្រីនឡើយ" : "No writable characteristic found.");
+        }
+
+        btCharacteristic = writeChar;
+        
+        if (btn) btn.style.background = 'rgba(16, 185, 129, 0.15)';
+        if (textSpan) textSpan.innerText = btDevice.name || 'Printer Connected';
+        if (icon) icon.style.color = '#10b981';
+
+        btDevice.addEventListener('gattserverdisconnected', () => {
+            btDevice = null;
+            btCharacteristic = null;
+            if (btn) btn.style.background = 'rgba(255,255,255,0.05)';
+            if (textSpan) textSpan.innerText = state.lang === 'kh' ? 'Bluetooth បិទ' : 'Bluetooth Off';
+            if (icon) icon.style.color = '#6b7280';
+        });
+
+        alert((state.lang === 'kh' ? "បានភ្ជាប់ទៅកាន់ម៉ាស៊ីនព្រីន៖ " : "Connected to: ") + (btDevice.name || "Printer"));
+    } catch (err) {
+        console.error("Bluetooth connection failed", err);
+        if (textSpan) textSpan.innerText = state.lang === 'kh' ? 'Bluetooth បិទ' : 'Bluetooth Off';
+        if (icon) icon.style.color = '#6b7280';
+        alert((state.lang === 'kh' ? "ការតភ្ជាប់បរាជ័យ៖ " : "Connection failed: ") + err.message);
+    }
+}
+
+// Wrap text helper for Canvas (supports Khmer character boundaries)
+function wrapCanvasText(ctx, text, x, y, maxWidth, lineHeight) {
+    let currentY = y;
+    let line = '';
+    
+    for (let i = 0; i < text.length; i++) {
+        let char = text[i];
+        let testLine = line + char;
+        let metrics = ctx.measureText(testLine);
+        
+        if (char === '\n') {
+            ctx.fillText(line, x, currentY);
+            line = '';
+            currentY += lineHeight;
+            continue;
+        }
+        
+        if (metrics.width > maxWidth) {
+            let lastSpace = line.lastIndexOf(' ');
+            if (lastSpace > 0 && lastSpace > line.length - 15) {
+                ctx.fillText(line.substring(0, lastSpace), x, currentY);
+                line = line.substring(lastSpace + 1) + char;
+            } else {
+                ctx.fillText(line, x, currentY);
+                line = char;
+            }
+            currentY += lineHeight;
+        } else {
+            line = testLine;
+        }
+    }
+    if (line.length > 0) {
+        ctx.fillText(line, x, currentY);
+    }
+    return currentY + lineHeight;
+}
+
+// Convert canvas black/white pixels to ESC/POS raster bit-image format (GS v 0)
+function convertCanvasToEscPos(canvas) {
+    const ctx = canvas.getContext('2d');
+    const imgData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+    const data = imgData.data;
+
+    const widthBytes = Math.ceil(canvas.width / 8);
+    const escposData = [];
+
+    // ESC/POS initialize: ESC @ (1B 40)
+    escposData.push(0x1B, 0x40);
+
+    // GS v 0 m xL xH yL yH
+    escposData.push(0x1D, 0x76, 0x30, 0);
+    escposData.push(widthBytes & 0xFF);
+    escposData.push((widthBytes >> 8) & 0xFF);
+    escposData.push(canvas.height & 0xFF);
+    escposData.push((canvas.height >> 8) & 0xFF);
+
+    for (let y = 0; y < canvas.height; y++) {
+        for (let x = 0; x < widthBytes * 8; x++) {
+            const byteIdx = x >> 3;
+            const bitIdx = 7 - (x & 7);
+            
+            if (x % 8 === 0) {
+                escposData.push(0);
+            }
+            
+            let isBlack = false;
+            if (x < canvas.width) {
+                const pixelIdx = (y * canvas.width + x) * 4;
+                const r = data[pixelIdx];
+                const g = data[pixelIdx + 1];
+                const b = data[pixelIdx + 2];
+                const a = data[pixelIdx + 3];
+                
+                if (a < 127) {
+                    isBlack = false;
+                } else {
+                    const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
+                    isBlack = brightness < 180; // slightly darker threshold for clear print
+                }
+            }
+            
+            if (isBlack) {
+                escposData[escposData.length - 1] |= (1 << bitIdx);
+            }
+        }
+    }
+
+    // Line feeds and paper cut command: 4 line feeds + GS V 66 0
+    escposData.push(0x0A, 0x0A, 0x0A, 0x0A);
+    escposData.push(0x1D, 0x56, 0x42, 0x00); // Feed paper and cut (partial cut)
+
+    return escposData;
+}
+
+// Generate the receipt drawn on Canvas
+function drawReceiptToCanvas(ticket, isPage2 = false) {
+    const canvas = document.createElement('canvas');
+    canvas.width = 384; // 58mm printer width
+    canvas.height = 2500; // temporary height
+    const ctx = canvas.getContext('2d');
+    
+    // Set white background
+    ctx.fillStyle = '#ffffff';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+    
+    ctx.fillStyle = '#000000';
+    let y = 25;
+    let isKh = state.lang === 'kh';
+    
+    // 1. Header (Centered)
+    ctx.font = 'bold 15px "Kantumruy Pro", "Inter", sans-serif';
+    ctx.textAlign = 'center';
+    ctx.fillText(t('shopName') || "សុខ ស៊ីណេត", 192, y);
+    y += 20;
+    
+    ctx.font = '10px "Kantumruy Pro", "Inter", sans-serif';
+    ctx.fillText(t('shopAddress') || "ភូមិព្រែករកា ឃុំព្រែករកា", 192, y);
+    y += 15;
+    ctx.fillText((t('phone') || "ទូរសព្ទ") + ": " + (t('shopPhone') || "097..."), 192, y);
+    y += 20;
+
+    // Divider
+    function drawDashedLine(ctx, yLoc) {
+        ctx.strokeStyle = '#000000';
+        ctx.lineWidth = 1;
+        ctx.setLineDash([4, 4]);
+        ctx.beginPath();
+        ctx.moveTo(10, yLoc);
+        ctx.lineTo(374, yLoc);
+        ctx.stroke();
+        ctx.setLineDash([]);
+    }
+    
+    drawDashedLine(ctx, y);
+    y += 18;
+    
+    // Title
+    ctx.font = 'bold 12px "Kantumruy Pro", "Inter", sans-serif';
+    ctx.fillText(isPage2 ? (isKh ? "សំបុត្របញ្ចាំ (ច្បាប់ចម្លង)" : "Pawn Ticket (Copy)") : t('receiptTitle'), 192, y);
+    y += 12;
+    
+    // Draw outer box for Customer ID
+    ctx.strokeStyle = '#000000';
+    ctx.lineWidth = 1;
+    ctx.strokeRect(80, y, 224, 22);
+    ctx.font = 'bold 11px "Kantumruy Pro", "Inter", sans-serif';
+    ctx.fillText((t('customerId') || "ID") + ": " + (ticket.customerId || '-'), 192, y + 15);
+    y += 35;
+    
+    // 2. Info Block (Left/Right or stacked)
+    ctx.textAlign = 'left';
+    ctx.font = '10px "Kantumruy Pro", "Inter", sans-serif';
+    
+    function drawRow(label, value, yLoc) {
+        ctx.font = 'bold 10px "Kantumruy Pro", "Inter", sans-serif';
+        ctx.fillText(label, 15, yLoc);
+        ctx.font = '10px "Kantumruy Pro", "Inter", sans-serif';
+        ctx.fillText(value, 150, yLoc);
+    }
+    
+    drawRow((t('customer') || "អតិថិជន") + ":", ticket.customerName, y);
+    y += 16;
+    drawRow((t('phone') || "លេខទូរសព្ទ") + ":", ticket.customerPhone || '-', y);
+    y += 16;
+    drawRow((isKh ? 'កាលបរិច្ឆេទ' : 'Date') + ":", ticket.pawnDate, y);
+    y += 16;
+    drawRow((t('dueDate') || "ថ្ងៃកំណត់លោះ") + ":", ticket.dueDate, y);
+    y += 20;
+    
+    drawDashedLine(ctx, y);
+    y += 18;
+    
+    // Item Details
+    let weightTxt = ticket.weightUnit === 'khmer' ? gramsToKhmerWeight(ticket.weight).text : `${ticket.weight}g`;
+    let weightGramsStr = `${ticket.weight.toFixed(3)}g`;
+    
+    drawRow((t('itemType') || "ប្រភេទទ្រព្យ") + ":", t(ticket.itemType) + ` (${ticket.purity})`, y);
+    y += 16;
+    drawRow((t('weight') || "ទម្ងន់") + ":", `${weightTxt} (${weightGramsStr})`, y);
+    y += 16;
+    drawRow((t('itemDescription') || "ពណ៌នា") + ":", ticket.itemDescription || '-', y);
+    y += 16;
+    drawRow((t('notes') || "កំណត់ចំណាំ") + ":", ticket.notes || '-', y);
+    y += 20;
+    
+    drawDashedLine(ctx, y);
+    y += 18;
+    
+    // Financial Info
+    ctx.font = 'bold 11px "Kantumruy Pro", "Inter", sans-serif';
+    ctx.fillText((t('loanAmount') || "ប្រាក់ខ្ចី") + ":", 15, y);
+    ctx.textAlign = 'right';
+    ctx.fillText(formatCurrency(ticket.loanAmount, ticket.currency), 369, y);
+    ctx.textAlign = 'left';
+    y += 16;
+    
+    ctx.font = 'bold 10px "Kantumruy Pro", "Inter", sans-serif';
+    ctx.fillText((isKh ? 'ការប្រាក់/ថ្ងៃ' : 'Interest/Day') + ":", 15, y);
+    ctx.textAlign = 'right';
+    ctx.fillText(formatCurrency(ticket.interestRate, 'KHR'), 369, y);
+    ctx.textAlign = 'left';
+    y += 20;
+
+    // If Redeemed
+    if (ticket.status === 'redeemed') {
+        drawDashedLine(ctx, y);
+        y += 18;
+        
+        ctx.font = 'bold 10px "Kantumruy Pro", "Inter", sans-serif';
+        ctx.fillStyle = '#000000';
+        ctx.fillText((t('status') || "ស្ថានភាព") + ":", 15, y);
+        ctx.textAlign = 'right';
+        ctx.fillText((t('redeemed') || "បានលោះវិញ") + ` (${ticket.redeemedDate})`, 369, y);
+        ctx.textAlign = 'left';
+        y += 16;
+        
+        ctx.fillText((t('interestPaid') || "ការប្រាក់បង់") + ":", 15, y);
+        ctx.textAlign = 'right';
+        ctx.fillText(formatCurrency(ticket.redeemedInterestPaid || 0, 'KHR'), 369, y);
+        ctx.textAlign = 'left';
+        y += 16;
+        
+        ctx.fillText((t('totalCashIn') || "ប្រាក់រួម") + ":", 15, y);
+        ctx.textAlign = 'right';
+        let totalStr = ticket.currency === 'USD' ?
+            `$${(ticket.redeemedTotalPaid - ticket.redeemedInterestPaid).toLocaleString()} + ${formatCurrency(ticket.redeemedInterestPaid || 0, 'KHR')}` :
+            `${formatCurrency(ticket.redeemedTotalPaid, 'KHR')}`;
+        ctx.fillText(totalStr, 369, y);
+        ctx.textAlign = 'left';
+        y += 20;
+    }
+    
+    // Additional borrows session table
+    if (ticket.additionalLoans && ticket.additionalLoans.length > 0) {
+        drawDashedLine(ctx, y);
+        y += 18;
+        
+        ctx.font = 'bold 10px "Kantumruy Pro", "Inter", sans-serif';
+        ctx.fillText(isKh ? 'ខ្ចីប្រាក់បន្ថែម៖' : 'Additional Borrowings:', 15, y);
+        y += 16;
+        
+        // Draw small Table Headers
+        ctx.font = 'bold 8px "Kantumruy Pro", "Inter", sans-serif';
+        ctx.fillText(isKh ? 'លើក' : 'No', 15, y);
+        ctx.fillText(isKh ? 'ប្រាក់បន្ថែម' : 'Amount', 60, y);
+        ctx.fillText(isKh ? 'ការប្រាក់/ថ្ងៃ' : 'Int/Day', 170, y);
+        ctx.fillText(isKh ? 'ថ្ងៃខ្ចី' : 'Date', 270, y);
+        y += 12;
+        
+        ctx.strokeStyle = '#cccccc';
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(15, y - 2);
+        ctx.lineTo(369, y - 2);
+        ctx.stroke();
+        
+        // Primary
+        let additionalPrincipalSum = ticket.additionalLoans.reduce((sum, p) => sum + p.amount, 0);
+        let primaryAmount = Math.max(0, ticket.loanAmount - additionalPrincipalSum);
+        ctx.font = '8px "Kantumruy Pro", "Inter", sans-serif';
+        ctx.fillText(isKh ? '១ (ដើម)' : '1st', 15, y);
+        ctx.fillText(formatCurrency(primaryAmount, ticket.currency), 60, y);
+        ctx.fillText(formatCurrency(ticket.interestRate, 'KHR'), 170, y);
+        ctx.fillText(ticket.pawnDate, 270, y);
+        y += 12;
+        
+        ticket.additionalLoans.forEach((loan, idx) => {
+            let ord = idx + 2;
+            let ordKh = ord === 2 ? '២' : (ord === 3 ? '៣' : (ord === 4 ? '៤' : (ord === 5 ? '៥' : ord)));
+            ctx.fillText(isKh ? `លើក${ordKh}` : `${ord}th`, 15, y);
+            ctx.fillText(formatCurrency(loan.amount, ticket.currency), 60, y);
+            ctx.fillText(formatCurrency(loan.interestRate, 'KHR'), 170, y);
+            ctx.fillText(loan.pawnDate, 270, y);
+            y += 12;
+        });
+        y += 10;
+    }
+    
+    // Terms & Conditions
+    if (!isPage2) {
+        drawDashedLine(ctx, y);
+        y += 18;
+        
+        ctx.font = 'bold 9px "Kantumruy Pro", "Inter", sans-serif';
+        ctx.fillText(isKh ? 'លក្ខខណ្ឌ និងការបញ្ជាក់បន្ថែម៖' : 'Terms & Conditions:', 15, y);
+        y += 14;
+        
+        ctx.font = '8px "Kantumruy Pro", "Inter", sans-serif';
+        let termsText = t('receiptTerms') || "";
+        y = wrapCanvasText(ctx, termsText, 15, y, 350, 12);
+        y += 10;
+    }
+    
+    // Crop canvas to actual height
+    const finalCanvas = document.createElement('canvas');
+    finalCanvas.width = 384;
+    finalCanvas.height = y + 20;
+    const finalCtx = finalCanvas.getContext('2d');
+    
+    // Draw source canvas to final canvas
+    finalCtx.drawImage(canvas, 0, 0);
+    return finalCanvas;
+}
+
+// Print Receipt logic via Web Bluetooth
+async function printTicketViaBluetooth(id) {
+    let ticket = state.tickets.find(t => t.id === id);
+    if (!ticket) return;
+    
+    if (!btCharacteristic) {
+        const confirmConnect = confirm(state.lang === 'kh' ? 
+            "អ្នកមិនទាន់បានភ្ជាប់ទៅកាន់ Bluetooth Printer នៅឡើយទេ។ តើចង់ភ្ជាប់ឥឡូវនេះទេ?" : 
+            "Bluetooth printer is not connected. Would you like to connect now?");
+        if (confirmConnect) {
+            const connected = await connectBluetoothPrinter();
+            if (!connected) return;
+        } else {
+            return;
+        }
+    }
+    
+    try {
+        addLog("PRINT_BLUETOOTH_START", `Initiated Bluetooth print for ticket ${ticket.id}`);
+
+        // Generate Canvas 1 (Customer Receipt)
+        const canvas1 = drawReceiptToCanvas(ticket, false);
+        const bytes1 = convertCanvasToEscPos(canvas1);
+        
+        // Generate Canvas 2 (Shop Copy)
+        const canvas2 = drawReceiptToCanvas(ticket, true);
+        const bytes2 = convertCanvasToEscPos(canvas2);
+
+        // Combine bytes
+        const allBytes = [...bytes1, ...bytes2];
+
+        // Send to printer in chunks
+        const CHUNK_SIZE = 100;
+        const uint8Data = new Uint8Array(allBytes);
+        
+        for (let i = 0; i < uint8Data.length; i += CHUNK_SIZE) {
+            const chunk = uint8Data.slice(i, i + CHUNK_SIZE);
+            await btCharacteristic.writeValue(chunk);
+            await new Promise(resolve => setTimeout(resolve, 30)); // 30ms throttle delay
+        }
+
+        addLog("PRINT_RECEIPT_BLUETOOTH", `Successfully printed ticket ${ticket.id} via Bluetooth`);
+        alert(state.lang === 'kh' ? "បោះពុម្ពវិក្កយបត្របានជោគជ័យ!" : "Receipt printed successfully!");
+    } catch (err) {
+        console.error("Printing failed:", err);
+        alert((state.lang === 'kh' ? "ការបោះពុម្ពបរាជ័យ៖ " : "Printing failed: ") + err.message);
+    }
+}
+
